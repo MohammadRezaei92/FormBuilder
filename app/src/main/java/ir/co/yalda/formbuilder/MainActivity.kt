@@ -1,26 +1,33 @@
 package ir.co.yalda.formbuilder
 
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
-import android.support.design.widget.Snackbar
-import android.support.v7.app.AppCompatActivity
+import android.util.Log
+import com.google.android.material.snackbar.Snackbar
+import androidx.appcompat.app.AppCompatActivity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.ViewGroup
-import android.widget.LinearLayout
+import androidx.lifecycle.MutableLiveData
 import com.google.gson.Gson
-import ir.co.yalda.formbuilder.entity.MainForm
-import ir.co.yalda.formbuilder.utility.ElementParser
+import com.google.gson.GsonBuilder
+import com.google.gson.TypeAdapter
+import com.google.gson.reflect.TypeToken
+import ir.co.yalda.formbuilder.entity.Court
+import ir.co.yalda.formbuilder.entity.Model
+import ir.co.yalda.formbuilder.entity.Sheriff
+import ir.co.yalda.formbuilder.formViews.ElementParser
+import ir.co.yalda.formbuilder.formViews.ElementsActivityRequestCallback
 import ir.co.yalda.formbuilder.utility.Json
 
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.content_main.*
-import kotlinx.android.synthetic.main.row_view.*
-import kotlinx.android.synthetic.main.row_view.view.*
 
 class MainActivity : AppCompatActivity() {
 
-    private var rowWeight = 6
-    private lateinit var row: ViewGroup
+    private lateinit var elementParser: ElementParser
+    private lateinit var cameraResult: MutableLiveData<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,83 +35,47 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
 
         fab.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                    .setAction("Action", null).show()
+            if (elementParser.isItemsValid()) {
+                val json = GsonBuilder()
+                        .setPrettyPrinting()
+                        .setLenient()
+                        .create()
+                        .toJson(elementParser.getResult())
+                Log.d("Elements", json)
+            }
         }
 
         getJsonFrom()
     }
 
-    private fun getJsonFrom(){
-        val form = Gson().fromJson<MainForm>(Json.json,MainForm::class.java)
+    private fun getJsonFrom() {
+        val form = Gson().fromJson<Model>(Json.json, Model::class.java)
+        elementParser = ElementParser(this, form.data, layoutContainer, object : ElementsActivityRequestCallback {
+            override fun requestPermission(permission: String) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    requestPermissions(arrayOf(permission), 123)
+                }
+            }
 
-        row = layoutInflater.inflate(R.layout.row_view,null,false) as ViewGroup
-        form.forms?.get(0)?.elements?.forEach {
-            addElement(it)
-        }
-        layoutContainer.addView(row)
+            override fun onPhotoTaken(result: MutableLiveData<Intent>) {
+                cameraResult = result
+            }
+
+            override fun courtListNeeded(courtList: MutableLiveData<List<Court>>) {
+                val courts = Gson().fromJson<List<Court>>(Json.courts, object : TypeToken<List<Court>>() {}.type)
+                courtList.value = courts
+            }
+
+            override fun sheriffListNeeded(sheriffList: MutableLiveData<List<Sheriff>>) {
+                val sheriffs = Gson().fromJson<List<Sheriff>>(Json.sheriffs, object : TypeToken<List<Sheriff>>() {}.type)
+                sheriffList.value = sheriffs
+            }
+        })
     }
 
-    private fun addElement(element: MainForm.Element){
-        ElementParser(this,element).let {
-            if(it.getDimension().second <= rowWeight.minus(it.getDimension().first)){
-                when(it.getDimension().first){
-                    0 -> {
-                        for(x in 0..row.childCount.minus(1)){
-                            if((row.getChildAt(x) as ViewGroup).childCount == 0){
-                                (row.getChildAt(x) as ViewGroup).addView(it.getComponent())
-                                val param = row.getChildAt(x).layoutParams as LinearLayout.LayoutParams
-                                param.weight = it.getDimension().second.toFloat()
-                                row.getChildAt(x).requestLayout()
-                                break
-                            }
-                        }
-                    }
-                    1 -> {
-                        row.cell1.addView(it.getComponent())
-                        val param = row.cell1.layoutParams as LinearLayout.LayoutParams
-                        param.weight = it.getDimension().second.toFloat()
-                        row.cell1.requestLayout()
-                    }
-                    2 -> {
-                        row.cell2.addView(it.getComponent())
-                        val param = row.cell2.layoutParams as LinearLayout.LayoutParams
-                        param.weight = it.getDimension().second.toFloat()
-                        row.cell2.requestLayout()
-                    }
-                    3 -> {
-                        row.cell3.addView(it.getComponent())
-                        val param = row.cell3.layoutParams as LinearLayout.LayoutParams
-                        param.weight = it.getDimension().second.toFloat()
-                        row.cell3.requestLayout()
-                    }
-                    4 -> {
-                        row.cell4.addView(it.getComponent())
-                        val param = row.cell4.layoutParams as LinearLayout.LayoutParams
-                        param.weight = it.getDimension().second.toFloat()
-                        row.cell4.requestLayout()
-                    }
-                    5 -> {
-                        row.cell5.addView(it.getComponent())
-                        val param = row.cell5.layoutParams as LinearLayout.LayoutParams
-                        param.weight = it.getDimension().second.toFloat()
-                        row.cell5.requestLayout()
-                    }
-                    6 -> {
-                        row.cell6.addView(it.getComponent())
-                        val param = row.cell6.layoutParams as LinearLayout.LayoutParams
-                        param.weight = it.getDimension().second.toFloat()
-                        row.cell6.requestLayout()
-                    }
-                }
-                rowWeight -= it.getDimension().second.plus(it.getDimension().first)
-            } else {
-                layoutContainer.addView(row)
-                rowWeight = 6
-                row = layoutInflater.inflate(R.layout.row_view,null,false) as ViewGroup
-                addElement(element)
-            }
-        }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        cameraResult.value = data
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
